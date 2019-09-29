@@ -14,7 +14,7 @@ function queueUpdates(numTicks) {
     }
 }
 
-function checkBordersCollision(ball) {
+function checkBallBordersCollision(ball) {
     if ((ball.x > canvas.width) || (ball.x < 0)) {
         ball.vx = -ball.vx
     }
@@ -24,13 +24,30 @@ function checkBordersCollision(ball) {
     }
     
     if ((ball.y > canvas.height)) {
-        //stopGame(gameState.stopCycle)
-        ball.vy = -ball.vy
+        stopGame(gameState.stopCycle)
+        //ball.vy = -ball.vy
     }
 
 }
 
-function checkPlatformCollision(ball) {
+function checkBonusBordersCollision(bonus) {
+    if ((bonus.x > canvas.width) || (bonus.x < 0)) {
+        bonus.vx = -bonus.vx
+    }
+
+    if ((bonus.y < 0)) {
+        bonus.vy = -bonus.vy
+    }
+    
+    if ((bonus.y > canvas.height)) {
+        bonus.isVisible = false
+    }
+
+}
+
+
+// This is not DRY. Refactor :(
+function checkBallPlatformCollision(ball) {
     const player = gameState.player
     if ((ball.x > player.x - gameState.player.width/2) && 
         (ball.x < player.x + player.width/2) &&
@@ -40,12 +57,28 @@ function checkPlatformCollision(ball) {
     }
 }
 
-function checkCollisions(ball) {
-    checkPlatformCollision(ball)
-    checkBordersCollision(ball)
+// This is not DRY. Refactor :(
+function checkBonusPlatformCollision(bonus) {
+    const player = gameState.player
+    if ((bonus.x > player.x - player.width/2) && 
+        (bonus.x < player.x + player.width/2) &&
+        ((bonus.y + bonus.fontHeight / 10) >= (canvas.height - player.height))) {
+        gameState.count.score += 15
+        bonus.isVisible = false
+    }
+}
 
-    ball.y += ball.vy
-    ball.x += ball.vx
+// This is not DRY. Refactor :(
+function checkBallCollisions(ball) {
+    checkBallPlatformCollision(ball)
+    checkBallBordersCollision(ball)
+}
+
+function checkBonusCollisions(bonus) {
+    if (bonus.isVisible) {
+        checkBonusPlatformCollision(bonus)
+        checkBonusBordersCollision(bonus)
+    }
 }
 
 function draw(tFrame) {
@@ -53,24 +86,33 @@ function draw(tFrame) {
 
     // clear canvas
     context.clearRect(0, 0, canvas.width, canvas.height);
+    
+    context.fillStyle = "#1F161C";
+    context.fillRect(0,0,canvas.width,canvas.height);
 
     drawPlatform(context)
     drawBall(context)
     drawCount(context)
+    drawBonus(context)
 }
 
 function update(tick) {
 
     const vx = (gameState.pointer.x - gameState.player.x) / 10
-    gameState.player.x += vx
-
-    const ball = gameState.ball
-    checkCollisions(ball)
-    
     const count = gameState.count
+    const ball = gameState.ball
+    const bonus = gameState.bonus
+    
+    gameState.player.x += vx
+    checkBallCollisions(ball)
+    checkBonusCollisions(bonus)
+
+    ball.y += ball.vy
+    ball.x += ball.vx
+    
     addCount(count)
     addSpeed(ball)
-
+    spawnBonus(bonus)
 }
 
 function addCount(count) {
@@ -85,6 +127,28 @@ function addSpeed(ball) {
         ball.vx *= 1.1
         ball.vy *= 1.1
         gameState.lastSpeedupTick = gameState.lastTick
+    }
+}
+
+function spawnBonus(bonus) {
+    if (timeForBonus()) {
+        bonus.isVisible = true;
+        bonus.x = getRandomArbitrary(0,canvas.width)
+        bonus.y = getRandomArbitrary(0, canvas.height / 2)
+        bonus.vx = 0;
+        bonus.vy = 0;
+    }
+    bonus.vy = 1
+    bonus.x += bonus.vx
+    bonus.y += bonus.vy
+}
+
+function timeForBonus() {
+    if (!gameState.bonus.isVisible && gameState.lastTick - gameState.lastBonusTick >= 2000) {
+        gameState.lastBonusTick = gameState.lastTick;
+        return true
+    } else {
+        return false
     }
 }
 
@@ -111,7 +175,9 @@ function drawPlatform(context) {
     const {x, y, width, height} = gameState.player;
     context.beginPath();
     context.rect(x - width / 2, y - height / 2, width, height);
-    context.fillStyle = "#FF0000";
+    context.fillStyle = "#DA288D";
+    context.shadowBlur = 10;
+    context.shadowColor = "#dce1e6";
     context.fill();
     context.closePath();
 }
@@ -120,7 +186,7 @@ function drawBall(context) {
     const {x, y, radius} = gameState.ball;
     context.beginPath();
     context.arc(x, y, radius, 0, 2 * Math.PI);
-    context.fillStyle = "#0000FF";
+    context.fillStyle = "#2992BA";
     context.fill();
     context.closePath();
 }
@@ -128,12 +194,26 @@ function drawBall(context) {
 function drawCount(context) {
     const {x, y, width, height, score} = gameState.count;
     context.beginPath()
-    context.rect(x+1, y, width , height)
-    context.strokeStyle = '#000000'
+    context.rect(x, y, width , height)
+    context.strokeStyle = "#9ff3fc";
     context.stroke()
     context.closePath()
-    context.font = "14px serif";
-    context.fillText("Score: " + score, x + width/4, y + height/2);
+    context.font = "14px sans-serif";
+    context.fillStyle = "#9ff3fc";
+    context.fillText("Score: " + score, x + width/4, y + height/2 + 0.5);
+}
+
+function drawBonus(context) {
+    if (!gameState.bonus.isVisible) return
+    
+    const {x, y, width, height} = gameState.bonus
+    context.fillStyle = '#9ff3fc';
+    context.font = gameState.bonus.fontHeight + "px sans-serif";
+    context.fillText("+", x, y);
+}
+
+function getRandomArbitrary(min, max) {
+    return Math.round(Math.random() * (max - min) + min);
 }
 
 function setup() {
@@ -145,6 +225,7 @@ function setup() {
     gameState.lastTick = performance.now();
     gameState.lastScoreTick = gameState.lastTick;
     gameState.lastSpeedupTick = gameState.lastTick;
+    gameState.lastBonusTick = gameState.lastTick;
     gameState.lastRender = gameState.lastTick;
     gameState.tickLength = 15; //ms
 
@@ -176,6 +257,17 @@ function setup() {
         width: 100,
         height: 50,
         score: 0
+    }
+
+    gameState.bonus = {
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        width: 100,
+        height: 100,
+        isVisible: false,
+        fontHeight: 80
     }
 }
 
